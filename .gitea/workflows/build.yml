@@ -1,0 +1,62 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x'
+          channel: stable
+          cache: true
+
+      - name: Create Flutter scaffold
+        run: |
+          flutter create --org com.modbusclient --project-name modbus_tcp_client /tmp/flutter_scaffold
+          # Overlay our source files
+          cp -r lib/ /tmp/flutter_scaffold/
+          cp pubspec.yaml /tmp/flutter_scaffold/
+          cp analysis_options.yaml /tmp/flutter_scaffold/
+
+      - name: Get dependencies
+        working-directory: /tmp/flutter_scaffold
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: /tmp/flutter_scaffold
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        working-directory: /tmp/flutter_scaffold
+        run: flutter test
+
+      - name: Build release APK
+        working-directory: /tmp/flutter_scaffold
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ github.sha }}
+          path: /tmp/flutter_scaffold/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
