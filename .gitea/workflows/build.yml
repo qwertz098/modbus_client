@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - main
-      - 'claude/**'
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - main
@@ -33,7 +34,6 @@ jobs:
       - name: Create Flutter scaffold
         run: |
           flutter create --org com.modbusclient --project-name modbus_tcp_client /tmp/flutter_scaffold
-          # Overlay our source files
           cp -r lib/ /tmp/flutter_scaffold/
           cp pubspec.yaml /tmp/flutter_scaffold/
           cp analysis_options.yaml /tmp/flutter_scaffold/
@@ -54,9 +54,81 @@ jobs:
         working-directory: /tmp/flutter_scaffold
         run: flutter build apk --release
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-${{ github.sha }}
-          path: /tmp/flutter_scaffold/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
+      - name: Copy APK to workspace
+        run: cp /tmp/flutter_scaffold/build/app/outputs/flutter-apk/app-release.apk ./modbus_tcp_client.apk
+
+      # --- main branch: rolling "latest" pre-release ---
+      - name: Publish latest pre-release
+        if: github.ref == 'refs/heads/main'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          COMMIT="${{ github.sha }}"
+
+          # Remove existing 'latest' release + tag if present
+          RELEASE_ID=$(curl -sf \
+            -H "Authorization: token $TOKEN" \
+            "$SERVER/api/v1/repos/$REPO/releases/tags/latest" \
+            | jq -r '.id // empty')
+
+          if [ -n "$RELEASE_ID" ]; then
+            curl -sf -X DELETE \
+              -H "Authorization: token $TOKEN" \
+              "$SERVER/api/v1/repos/$REPO/releases/$RELEASE_ID" || true
+          fi
+
+          curl -sf -X DELETE \
+            -H "Authorization: token $TOKEN" \
+            "$SERVER/api/v1/repos/$REPO/tags/latest" || true
+
+          # Create new pre-release
+          RELEASE_ID=$(curl -sf -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"tag_name\": \"latest\",
+              \"name\": \"Latest Build\",
+              \"body\": \"Auto-built from main — commit \`${COMMIT:0:7}\`\",
+              \"prerelease\": true,
+              \"draft\": false
+            }" \
+            "$SERVER/api/v1/repos/$REPO/releases" \
+            | jq -r '.id')
+
+          # Attach APK
+          curl -sf -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @modbus_tcp_client.apk \
+            "$SERVER/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=modbus_tcp_client.apk"
+
+      # --- version tag: proper versioned release ---
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          RELEASE_ID=$(curl -sf -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"tag_name\": \"$TAG\",
+              \"name\": \"Release $TAG\",
+              \"body\": \"Release $TAG\",
+              \"prerelease\": false,
+              \"draft\": false
+            }" \
+            "$SERVER/api/v1/repos/$REPO/releases" \
+            | jq -r '.id')
+
+          curl -sf -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @modbus_tcp_client.apk \
+            "$SERVER/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=modbus_tcp_client-$TAG.apk"
