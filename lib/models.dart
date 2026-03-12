@@ -132,6 +132,7 @@ class ModbusFC {
 
 class Endpoint {
   String id;
+  String label;
   String ip;
   int port;
   int unitId;
@@ -149,6 +150,7 @@ class Endpoint {
 
   Endpoint({
     String? id,
+    this.label = '',
     this.ip = '192.168.0.1',
     this.port = 502,
     this.unitId = 3,
@@ -175,6 +177,7 @@ class Endpoint {
   String get connectionKey => '$ip:$port:$unitId';
 
   Endpoint clone() => Endpoint(
+    label: label,
     ip: ip,
     port: port,
     unitId: unitId,
@@ -186,6 +189,7 @@ class Endpoint {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'label': label,
     'ip': ip,
     'port': port,
     'unitId': unitId,
@@ -197,6 +201,7 @@ class Endpoint {
 
   factory Endpoint.fromJson(Map<String, dynamic> json) => Endpoint(
     id: json['id'] as String?,
+    label: json['label'] as String? ?? '',
     ip: json['ip'] as String? ?? '192.168.0.1',
     port: json['port'] as int? ?? 502,
     unitId: json['unitId'] as int? ?? 3,

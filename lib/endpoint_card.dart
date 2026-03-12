@@ -13,6 +13,7 @@ class EndpointCard extends StatefulWidget {
 }
 
 class _EndpointCardState extends State<EndpointCard> {
+  late TextEditingController _labelCtrl;
   late TextEditingController _ipCtrl;
   late TextEditingController _portCtrl;
   late TextEditingController _unitCtrl;
@@ -24,6 +25,7 @@ class _EndpointCardState extends State<EndpointCard> {
   void initState() {
     super.initState();
     final ep = context.read<AppState>().endpoints[widget.index];
+    _labelCtrl = TextEditingController(text: ep.label);
     _ipCtrl    = TextEditingController(text: ep.ip);
     _portCtrl  = TextEditingController(text: ep.port.toString());
     _unitCtrl  = TextEditingController(text: ep.unitId.toString());
@@ -44,6 +46,7 @@ class _EndpointCardState extends State<EndpointCard> {
     final state = context.read<AppState>();
     if (widget.index >= state.endpoints.length) return;
     final ep = state.endpoints[widget.index];
+    if (_labelCtrl.text != ep.label) _labelCtrl.text = ep.label;
     if (_ipCtrl.text != ep.ip) _ipCtrl.text = ep.ip;
     if (_portCtrl.text != ep.port.toString()) _portCtrl.text = ep.port.toString();
     if (_unitCtrl.text != ep.unitId.toString()) _unitCtrl.text = ep.unitId.toString();
@@ -53,6 +56,7 @@ class _EndpointCardState extends State<EndpointCard> {
 
   @override
   void dispose() {
+    _labelCtrl.dispose();
     _ipCtrl.dispose();
     _portCtrl.dispose();
     _unitCtrl.dispose();
@@ -66,6 +70,7 @@ class _EndpointCardState extends State<EndpointCard> {
     final state = context.read<AppState>();
     if (widget.index >= state.endpoints.length) return;
     final ep = state.endpoints[widget.index];
+    ep.label = _labelCtrl.text.trim();
     ep.ip = _ipCtrl.text.trim();
     ep.port = int.tryParse(_portCtrl.text) ?? 502;
     ep.unitId = int.tryParse(_unitCtrl.text) ?? 1;
@@ -132,17 +137,35 @@ class _EndpointCardState extends State<EndpointCard> {
             const SizedBox(width: 8),
             // Summary
             Expanded(
-              child: Text(
-                '${ep.ip}:${ep.port}  U:${ep.unitId}  '
-                '${ModbusFC.shortLabel(ep.functionCode)}  '
-                'R:${ep.registerAddress}  ${ep.dataType.label}'
-                '${ep.showBitIndex ? ".${ep.bitIndex}" : ""}',
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12.5,
-                  color: cs.onSurface,
-                ),
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (ep.label.isNotEmpty)
+                    Text(
+                      ep.label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  Text(
+                    '${ep.ip}:${ep.port}  U:${ep.unitId}  '
+                    '${ModbusFC.shortLabel(ep.functionCode)}  '
+                    'R:${ep.registerAddress}  ${ep.dataType.label}'
+                    '${ep.showBitIndex ? ".${ep.bitIndex}" : ""}',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12.5,
+                      color: ep.label.isNotEmpty
+                          ? cs.onSurfaceVariant
+                          : cs.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
             // Value chip
@@ -187,6 +210,9 @@ class _EndpointCardState extends State<EndpointCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Row 0: Label
+          _field('Label (optional)', _labelCtrl, onChanged: (_) => _apply()),
+          const SizedBox(height: 6),
           // Row 1: IP + Port
           Row(
             children: [
